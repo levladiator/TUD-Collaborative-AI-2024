@@ -19,6 +19,7 @@ if __name__ == "__main__":
     else:
         print("\nEnter one of the human conditions 'normal', 'strong', or 'weak':")
         choice3=input()
+        # TODO add NEVER-TRUST, ALWAYS-TRUST and RANDOM-TRUST
         if choice3=='normal' or choice3=='strong' or choice3=='weak':
             builder = create_builder(task_type=choice1, condition=choice3, name=choice2, folder=fld)
         else:

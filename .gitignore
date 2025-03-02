@@ -1,2 +1,4 @@
 .idea
 .venv
+SaR_gui
+**/__pycache__

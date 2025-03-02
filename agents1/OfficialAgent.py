@@ -14,6 +14,8 @@ from matrx.actions.move_actions import MoveNorth
 from matrx.messages.message import Message
 from matrx.messages.message_manager import MessageManager
 from actions1.CustomActions import RemoveObjectTogether, CarryObjectTogether, DropObjectTogether, CarryObject, Drop
+from collections import defaultdict
+
 
 
 class Phase(enum.Enum):
@@ -73,6 +75,7 @@ class BaselineAgent(ArtificialBrain):
         self._recent_vic = None
         self._received_messages = []
         self._moving = False
+        self._tasks = ['rescue', 'search']
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -791,10 +794,10 @@ class BaselineAgent(ArtificialBrain):
                 return Drop.__name__, {'human_name': self._human_name}
 
     def _get_drop_zones(self, state):
-        '''
+        """
         @return list of drop zones (their full dict), in order (the first one is the
         place that requires the first drop)
-        '''
+        """
         places = state[{'is_goal_block': True}]
         places.sort(key=lambda info: info['location'][1])
         zones = []
@@ -804,9 +807,9 @@ class BaselineAgent(ArtificialBrain):
         return zones
 
     def _process_messages(self, state, teamMembers, condition):
-        '''
+        """
         process incoming messages received from the team members
-        '''
+        """
 
         receivedMessages = {}
         # Create a dictionary with a list of received messages from each team member
@@ -905,11 +908,11 @@ class BaselineAgent(ArtificialBrain):
                 self._human_loc = int(mssgs[-1].split()[-1])
 
     def _loadBelief(self, members, folder):
-        '''
+        """
         Loads trust belief values if agent already collaborated with human before, otherwise trust belief values are initialized using default values.
-        '''
+        """
         # Create a dictionary with trust values for all team members
-        trustBeliefs = {}
+        trustBeliefs = defaultdict(dict)
         # Set a default starting trust value
         default = 0.5
         trustfile_header = []
@@ -918,47 +921,64 @@ class BaselineAgent(ArtificialBrain):
         with open(folder + '/beliefs/allTrustBeliefs.csv') as csvfile:
             reader = csv.reader(csvfile, delimiter=';', quotechar="'")
             for row in reader:
-                if trustfile_header == []:
+                if not trustfile_header:
                     trustfile_header = row
                     continue
                 # Retrieve trust values 
                 if row and row[0] == self._human_name:
                     name = row[0]
-                    competence = float(row[1])
-                    willingness = float(row[2])
-                    trustBeliefs[name] = {'competence': competence, 'willingness': willingness}
+                    task = row[1]
+                    competence = float(row[2])
+                    willingness = float(row[3])
+                    trustBeliefs[name][task] = {'competence': competence, 'willingness': willingness}
                 # Initialize default trust values
                 if row and row[0] != self._human_name:
                     competence = default
                     willingness = default
-                    trustBeliefs[self._human_name] = {'competence': competence, 'willingness': willingness}
+                    for task in self._tasks:
+                        trustBeliefs[self._human_name][task] = { 'competence': competence, 'willingness': willingness }
         return trustBeliefs
 
     def _trustBelief(self, members, trustBeliefs, folder, receivedMessages):
-        '''
+        """
         Baseline implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
-        '''
+        """
         # Update the trust value based on for example the received messages
         for message in receivedMessages:
-            # Increase agent trust in a team member that rescued a victim
             if 'Collect' in message:
-                trustBeliefs[self._human_name]['competence'] += 0.10
-                # Restrict the competence belief to a range of -1 to 1
-                trustBeliefs[self._human_name]['competence'] = np.clip(trustBeliefs[self._human_name]['competence'], -1,
-                                                                       1)
+                task = 'rescue'
+                self._change_belief(0.1, 0.1, task, trustBeliefs)
+            elif 'Search' in message:
+                task = 'search'
+                self._change_belief(0.1, 0.1, task, trustBeliefs)
+            elif 'Found' in message:
+                task = 'rescue'
+                self._change_belief(0.1, 0.1, task, trustBeliefs)
+            elif 'Remove' in message:
+                task = 'search'
+                self._change_belief(0.1, 0.1, task, trustBeliefs)
+            elif 'Continue' in message:
+                for task in self._tasks:
+                    self._change_belief(-0.1, -0.1, task, trustBeliefs)
+
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow(['name', 'competence', 'willingness'])
-            csv_writer.writerow([self._human_name, trustBeliefs[self._human_name]['competence'],
-                                 trustBeliefs[self._human_name]['willingness']])
+            csv_writer.writerow(['name', 'task', 'competence', 'willingness'])
+            for task in self._tasks:
+                csv_writer.writerow([self._human_name, trustBeliefs[self._human_name][task]['competence'], trustBeliefs[self._human_name][task]['willingness']])
 
         return trustBeliefs
 
+    def _change_belief(self, competence_adjustment: float, willingness_adjustment: float, task: str, trust_beliefs: dict):
+        new_competence =  np.clip(trust_beliefs[self._human_name][task]['competence'] + competence_adjustment, -1.0, 1.0)
+        new_willingness = np.clip(trust_beliefs[self._human_name][task]['willingness'] + willingness_adjustment, -1.0, 1.0)
+        trust_beliefs[self._human_name][task] = { 'competence': new_competence, 'willingness': new_willingness }
+
     def _send_message(self, mssg, sender):
-        '''
+        """
         send messages from agent to other team members
-        '''
+        """
         msg = Message(content=mssg, from_id=sender)
         if msg.content not in self.received_messages_content and 'Our score is' not in msg.content:
             self.send_message(msg)
@@ -968,9 +988,9 @@ class BaselineAgent(ArtificialBrain):
             self.send_message(msg)
 
     def _getClosestRoom(self, state, objs, currentDoor):
-        '''
+        """
         calculate which area is closest to the agent's location
-        '''
+        """
         agent_location = state[self.agent_id]['location']
         locs = {}
         for obj in objs:
@@ -985,9 +1005,9 @@ class BaselineAgent(ArtificialBrain):
         return min(dists, key=dists.get)
 
     def _efficientSearch(self, tiles):
-        '''
+        """
         efficiently transverse areas instead of moving over every single area tile
-        '''
+        """
         x = []
         y = []
         for i in tiles:
