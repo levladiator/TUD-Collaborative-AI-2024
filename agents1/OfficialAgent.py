@@ -72,9 +72,8 @@ class BaselineAgent(ArtificialBrain):
         self._received_messages = {}
         self._moving = False
         self._tasks = ['rescue', 'search']
-        self.trust_beliefs = {}
-        self._last_trust_decay_tick = 0  # We are using this to decay trust beliefs each 10 ticks
         self._message_count = 0
+        self._last_received_message_tick = 0
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -86,33 +85,28 @@ class BaselineAgent(ArtificialBrain):
         # Filtering of the world state before deciding on an action 
         return state
 
-    def _decay_trust(self, current_tick, trust_beliefs):
+    def _decay_trust(self, trust_beliefs, receivedMessages, use_logging):
         decay_rate = 0.02
-        tick_interval = 10
+        decay_rate_weak = 0.01
+        tick_interval = 5 # every 45 seconds we have a trust decay
+        print(self._tick, self._last_received_message_tick)
+        if self._tick - self._last_received_message_tick < tick_interval:
+            return trust_beliefs
 
-        # decay trust every 10 ticks
-        if current_tick - self._last_trust_decay_tick >= tick_interval:
-            for task in self._tasks:
-                if task in self.trust_beliefs[self._human_name]:
-                    current_competence = self.trust_beliefs[self._human_name][task]['competence']
-                    current_willingness = self.trust_beliefs[self._human_name][task]['willingness']
+        # decay trust every 45 ticks (no message received by the RescueBot)
+        for task in self._tasks:
+            if task in trust_beliefs[self._human_name]:
+                if trust_beliefs[self._human_name][task]['competence'] > 0:
+                    trust_beliefs[self._human_name][task]['competence'] -= decay_rate_weak
+                    print("Trust decayed at tick", self._tick)
+                    self._last_received_message_tick = self._tick
+                if trust_beliefs[self._human_name][task]['willingness'] > 0:
+                    trust_beliefs[self._human_name][task]['willingness'] -= decay_rate
+                    print("Trust decayed at tick", self._tick)
+                    self._last_received_message_tick = self._tick
 
-                    self.trust_beliefs[self._human_name][task]['competence'] += decay_rate * (0.5 - current_competence)
-                    self.trust_beliefs[self._human_name][task]['willingness'] += decay_rate * (
-                                0.5 - current_willingness)
-
-                    self.trust_beliefs[self._human_name][task]['competence'] = np.clip(
-                        self.trust_beliefs[self._human_name][task]['competence'], -1.0, 1.0
-                    )
-                    self.trust_beliefs[self._human_name][task]['willingness'] = np.clip(
-                        self.trust_beliefs[self._human_name][task]['willingness'], -1.0, 1.0
-                    )
-
-            self._last_trust_decay_tick = current_tick
-
-            print(
-                f"Trust decayed at tick {current_tick}. Current trust beliefs: {self.trust_beliefs[self._human_name]}")
-
+        log_info(use_logging, f"Trust decayed at tick {self._tick}. Current trust beliefs: {trust_beliefs[self._human_name]}")
+        return trust_beliefs
 
     def decide_on_actions(self, state):
         self._tick = time.perf_counter()
@@ -131,7 +125,6 @@ class BaselineAgent(ArtificialBrain):
         self._process_messages(state, self._team_members, self._condition)
         # Initialize and update trust beliefs for team members
         trustBeliefs = self._loadBelief(self._team_members, self._folder)
-        self.trust_beliefs = trustBeliefs
         self._trustBelief(self._team_members, trustBeliefs, self._folder, self._received_messages)
 
         # Check whether human is close in distance
@@ -992,12 +985,16 @@ class BaselineAgent(ArtificialBrain):
         Baseline implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         """
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
+        # Update the trust value based on for example the received messages
+        message_no = 0
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['timestamp', 'name', 'task', 'competence', 'willingness'])
-
-        # Update the trust value based on for example the received messages
-        message_no = 0
+            for task in self._tasks:
+                csv_writer.writerow(
+                    [message_no, self._human_name, task, trustBeliefs[self._human_name][task]['competence'],
+                     trustBeliefs[self._human_name][task]['willingness']])
+        message_no += 1
         for (message, pos), message_tick in receivedMessages.items():
             if 'Collect' in message:
                 task = 'rescue'
@@ -1069,6 +1066,8 @@ class BaselineAgent(ArtificialBrain):
                 for task in self._tasks:
                     self._change_belief(-0.1, -0.1, task, trustBeliefs)
 
+            trustBeliefs = self._decay_trust(trustBeliefs, receivedMessages, self._message_count != len(receivedMessages))
+
             # TODO: write to file only once, at the end
             with open(folder + '/beliefs/currentTrustBelief.csv', mode='a', newline='') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -1077,15 +1076,12 @@ class BaselineAgent(ArtificialBrain):
                         [message_no, self._human_name, task, trustBeliefs[self._human_name][task]['competence'],
                          trustBeliefs[self._human_name][task]['willingness']])
                 csv_writer.writerow('')
-            message_no += 1
 
-        self._decay_trust(self._tick, trustBeliefs)
-        self._message_count = len(receivedMessages)
+        if self._message_count != len(receivedMessages):
+            self._message_count = len(receivedMessages)
+            self._last_received_message_tick = self._tick
 
         return trustBeliefs
-
-    def get_beliefs(self):
-        return self.trust_beliefs.get(self._human_name, 'God')
 
     def _change_belief(self, competence_adjustment: float, willingness_adjustment: float, task: str,
                        trust_beliefs: dict):
