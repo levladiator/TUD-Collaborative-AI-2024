@@ -993,7 +993,6 @@ class BaselineAgent(ArtificialBrain):
                 message_tokens = message.split(" in ")
                 victim_location = "area " + message_tokens[1]
                 victim_name = message_tokens[0].replace("Collect: ", "")
-
                 if not self._found_victims[victim_name] or (
                         self._found_victims[victim_name] and self._found_victims[victim_name][0] >= message_tick):
                     log_info(self._message_count != len(receivedMessages), "Victim collected but not found")
@@ -1041,18 +1040,66 @@ class BaselineAgent(ArtificialBrain):
                             search_type = event['type']
                             break
 
-                    log_info(self._message_count != len(receivedMessages),
-                             "Location was searched before")
+                    log_info(self._message_count != len(receivedMessages), "Location was searched before")
                     competence_adj, willingness_adj = (-0.1, -0.1) if search_type == 'Human' else (
                         -0.15, -0.15)
                     self._change_belief(competence_adj, willingness_adj, task, trustBeliefs)
 
             elif 'Found' in message:
                 task = 'rescue'
-                self._change_belief(0.0, 0.0, task, trustBeliefs)
+                message_tokens = message.split(" in ")
+                location = "area " + message_tokens[-1]
+                victim_name = message_tokens[0].replace("Found: ", "")
+                if (victim_name not in self._found_victims) or (victim_name in self._found_victims and message_tick <= self._found_victims[victim_name][0]):
+                    log_info(self._message_count != len(receivedMessages), f"Found {victim_name} in {location}. Trust increases")
+                    self._change_belief(0.0, 0.05, task, trustBeliefs)
+                else:
+                    same_victim_reported_twice_at_different_location = False
+                    for found_log in self._found_victims_logs[victim_name]:
+                        if found_log['tick'] >= message_tick:
+                            break
+                        if found_log['room'] != location:
+                            same_victim_reported_twice_at_different_location = True
+                            break
+                    if same_victim_reported_twice_at_different_location:
+                        log_info(self._message_count != len(receivedMessages),
+                                 f"{victim_name} reported twice at different locations")
+                        self._change_belief(-0.1, -0.1, task, trustBeliefs)
+                    else:
+                        log_info(self._message_count != len(receivedMessages),
+                                 f"{victim_name} reported twice at the same location")
+                        self._change_belief(-0.05, -0.05, task, trustBeliefs)
+
+                if not self._searched_rooms[location] or (self._searched_rooms[location][0]['tick'] >= message_tick):
+                    log_info(self._message_count != len(receivedMessages),
+                             f"Found a victim in unsearched room {location}")
+                    self._change_belief(-0.2, -0.2, 'search', trustBeliefs)
+                    self._change_belief(-0.2, -0.2, 'rescue', trustBeliefs)
+
             elif 'Remove' in message:
                 task = 'search'
-                self._change_belief(0.0, 0, task, trustBeliefs)
+
+                if message == "Remove alone":
+                    log_info(self._message_count != len(receivedMessages),
+                             f"Nothing happens, as the robot will do it itself")
+                elif message == "Remove together":
+                    log_info(self._message_count != len(receivedMessages),
+                             f"Ability and willingness improve for wanting to remove together")
+                    self._change_belief(0.05, 0.05, task, trustBeliefs)
+                elif message == "Remove":
+                    log_info(self._message_count != len(receivedMessages),
+                             f"Willingness slightly increases as the player is willing to remove the obstacle")
+                    self._change_belief(0.0, 0.05, task, trustBeliefs)
+                else:
+                    location = "area" + message.replace("Remove: at", "")
+                    log_info(self._message_count != len(receivedMessages),
+                             f"Search willingness increases for wanting help to remove")
+                    self._change_belief(0.0, 0.1, task, trustBeliefs)
+                    if not self._searched_rooms[location] or (self._searched_rooms[location][0]['tick'] >= message_tick):
+                        log_info(self._message_count != len(receivedMessages),
+                                 f"Search trust decreases for asking for remove help in unsearched room {location}")
+                        self._change_belief(-0.2, -0.2, 'search', trustBeliefs)
+
             elif 'Continue' in message:
                 for task in self._tasks:
                     self._change_belief(-0.1, -0.1, task, trustBeliefs)
