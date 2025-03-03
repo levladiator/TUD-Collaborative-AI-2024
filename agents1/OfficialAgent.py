@@ -986,7 +986,7 @@ class BaselineAgent(ArtificialBrain):
         """
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         # Update the trust value based on for example the received messages
-        for (message, pos), message_tick in receivedMessages.items():
+        for i, ((message, pos), message_tick) in enumerate(receivedMessages.items()):
             if 'Collect' in message:
                 task = 'rescue'
 
@@ -995,7 +995,7 @@ class BaselineAgent(ArtificialBrain):
                 victim_name = message_tokens[0].replace("Collect: ", "")
                 if not self._found_victims[victim_name] or (
                         self._found_victims[victim_name] and self._found_victims[victim_name][0] >= message_tick):
-                    log_info(self._message_count != len(receivedMessages), "Victim collected but not found")
+                    log_info(self._message_count == i, "Victim collected but not found")
                     competence_adj, willingness_adj = compute_collected_adjustments(victim_name, -0.1)
                     self._change_belief(competence_adj, willingness_adj, task, trustBeliefs)
                 elif self._found_victims[victim_name][0] < message_tick:
@@ -1005,19 +1005,19 @@ class BaselineAgent(ArtificialBrain):
                             found_location = log['room']
 
                     if found_location != victim_location:
-                        log_info(self._message_count != len(receivedMessages),
+                        log_info( self._message_count == i,
                                  "Victim collected but found in another location")
                         competence_adj, willingness_adj = compute_collected_adjustments(victim_name, -0.05)
                         self._change_belief(competence_adj, willingness_adj, task, trustBeliefs)
                     else:
-                        log_info(self._message_count != len(receivedMessages),
+                        log_info( self._message_count == i,
                                  "Victim collected and found in right location")
                         competence_adj, willingness_adj = compute_collected_adjustments(victim_name, 0.1)
                         self._change_belief(competence_adj, willingness_adj, task, trustBeliefs)
 
                 if victim_location not in self._searched_rooms or (
                         self._searched_rooms[victim_location][0]['tick'] >= message_tick):
-                    log_info(self._message_count != len(receivedMessages),
+                    log_info( self._message_count == i,
                              "Victim collected but location was not searched")
                     self._change_belief(-0.2, -0.2, 'search', trustBeliefs)
                     self._change_belief(-0.2, -0.2, 'rescue', trustBeliefs)
@@ -1030,7 +1030,7 @@ class BaselineAgent(ArtificialBrain):
                 if search_location not in self._searched_rooms or (
                         search_location in self._searched_rooms and self._searched_rooms[search_location][0][
                     'tick'] >= message_tick):
-                    log_info(self._message_count != len(receivedMessages),
+                    log_info( self._message_count == i,
                              "Location searched for the first time")
                     self._change_belief(0.05, 0.05, task, trustBeliefs)
                 else:
@@ -1040,7 +1040,7 @@ class BaselineAgent(ArtificialBrain):
                             search_type = event['type']
                             break
 
-                    log_info(self._message_count != len(receivedMessages), "Location was searched before")
+                    log_info( self._message_count == i, "Location was searched before")
                     competence_adj, willingness_adj = (-0.1, -0.1) if search_type == 'Human' else (
                         -0.15, -0.15)
                     self._change_belief(competence_adj, willingness_adj, task, trustBeliefs)
@@ -1051,7 +1051,7 @@ class BaselineAgent(ArtificialBrain):
                 location = "area " + message_tokens[-1]
                 victim_name = message_tokens[0].replace("Found: ", "")
                 if (victim_name not in self._found_victims) or (victim_name in self._found_victims and message_tick <= self._found_victims[victim_name][0]):
-                    log_info(self._message_count != len(receivedMessages), f"Found {victim_name} in {location}. Trust increases")
+                    log_info( self._message_count == i, f"Found {victim_name} in {location}. Trust increases")
                     self._change_belief(0.0, 0.05, task, trustBeliefs)
                 else:
                     same_victim_reported_twice_at_different_location = False
@@ -1062,16 +1062,16 @@ class BaselineAgent(ArtificialBrain):
                             same_victim_reported_twice_at_different_location = True
                             break
                     if same_victim_reported_twice_at_different_location:
-                        log_info(self._message_count != len(receivedMessages),
+                        log_info( self._message_count == i,
                                  f"{victim_name} reported twice at different locations")
                         self._change_belief(-0.1, -0.1, task, trustBeliefs)
                     else:
-                        log_info(self._message_count != len(receivedMessages),
+                        log_info( self._message_count == i,
                                  f"{victim_name} reported twice at the same location")
                         self._change_belief(-0.05, -0.05, task, trustBeliefs)
 
                 if not self._searched_rooms[location] or (self._searched_rooms[location][0]['tick'] >= message_tick):
-                    log_info(self._message_count != len(receivedMessages),
+                    log_info( self._message_count == i,
                              f"Found a victim in unsearched room {location}")
                     self._change_belief(-0.2, -0.2, 'search', trustBeliefs)
                     self._change_belief(-0.2, -0.2, 'rescue', trustBeliefs)
@@ -1080,23 +1080,23 @@ class BaselineAgent(ArtificialBrain):
                 task = 'search'
 
                 if message == "Remove alone":
-                    log_info(self._message_count != len(receivedMessages),
+                    log_info( self._message_count == i,
                              f"Nothing happens, as the robot will do it itself")
                 elif message == "Remove together":
-                    log_info(self._message_count != len(receivedMessages),
+                    log_info( self._message_count == i,
                              f"Ability and willingness improve for wanting to remove together")
                     self._change_belief(0.05, 0.05, task, trustBeliefs)
                 elif message == "Remove":
-                    log_info(self._message_count != len(receivedMessages),
+                    log_info( self._message_count == i,
                              f"Willingness slightly increases as the player is willing to remove the obstacle")
                     self._change_belief(0.0, 0.05, task, trustBeliefs)
                 else:
                     location = "area" + message.replace("Remove: at", "")
-                    log_info(self._message_count != len(receivedMessages),
+                    log_info( self._message_count == i,
                              f"Search willingness increases for wanting help to remove")
                     self._change_belief(0.0, 0.1, task, trustBeliefs)
                     if not self._searched_rooms[location] or (self._searched_rooms[location][0]['tick'] >= message_tick):
-                        log_info(self._message_count != len(receivedMessages),
+                        log_info( self._message_count == i,
                                  f"Search trust decreases for asking for remove help in unsearched room {location}")
                         self._change_belief(-0.2, -0.2, 'search', trustBeliefs)
 
@@ -1109,7 +1109,6 @@ class BaselineAgent(ArtificialBrain):
         for task in self._tasks:
             self._change_belief(-total_decay, -total_decay, task, trustBeliefs, min_val = 0.0, max_val = 1.0)
 
-        # TODO: write to file only once, at the end
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['name', 'task', 'competence', 'willingness'])
