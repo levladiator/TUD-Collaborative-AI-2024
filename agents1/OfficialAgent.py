@@ -1067,7 +1067,7 @@ class BaselineAgent(ArtificialBrain):
                 csv_writer.writerow('')
             message_no += 1
 
-        print(self._human_name, trustBeliefs[self._human_name])
+        # print(self._human_name, trustBeliefs[self._human_name])
 
         self._decay_trust(self._tick, trustBeliefs)
 
