@@ -1,24 +1,15 @@
-import sys, random, enum, ast, time, csv
-import numpy as np
-from matrx import grid_world
+import enum, time, csv
 
-from agents1.AgentUtils import compute_collected_adjustments
+from agents1.AgentUtils import compute_collected_adjustments, log_info
 from brains1.ArtificialBrain import ArtificialBrain
 from actions1.CustomActions import *
 from matrx import utils
-from matrx.grid_world import GridWorld
-from matrx.agents.agent_utils.state import State
 from matrx.agents.agent_utils.navigator import Navigator
 from matrx.agents.agent_utils.state_tracker import StateTracker
-from matrx.actions.door_actions import OpenDoorAction
-from matrx.actions.object_actions import GrabObject, DropObject, RemoveObject
-from matrx.actions.move_actions import MoveNorth
+from matrx.actions.object_actions import RemoveObject
 from matrx.messages.message import Message
-from matrx.messages.message_manager import MessageManager
-from actions1.CustomActions import RemoveObjectTogether, CarryObjectTogether, DropObjectTogether, CarryObject, Drop
+from actions1.CustomActions import CarryObject, Drop
 from collections import defaultdict
-from flask import Flask, jsonify
-
 
 class Phase(enum.Enum):
     INTRO = 1,
@@ -83,6 +74,7 @@ class BaselineAgent(ArtificialBrain):
         self._tasks = ['rescue', 'search']
         self.trust_beliefs = {}
         self._last_trust_decay_tick = 0  # We are using this to decay trust beliefs each 10 ticks
+        self._message_count = 0
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -132,8 +124,8 @@ class BaselineAgent(ArtificialBrain):
         # Create a list of received messages from the human team member
         for i, mssg in enumerate(self.received_messages):
             for member in self._team_members:
-                if mssg.from_id == member and mssg.content not in self._received_messages:
-                    self._received_messages[mssg.content] = self._tick
+                if mssg.from_id == member and (mssg.content, i) not in self._received_messages:
+                    self._received_messages[(mssg.content, i)] = self._tick
 
         # Process messages from team members
         self._process_messages(state, self._team_members, self._condition)
@@ -623,11 +615,16 @@ class BaselineAgent(ArtificialBrain):
                                     self._phase = Phase.FIND_NEXT_GOAL
 
                             # Identify injured victim in the area
+                            if 'healthy' not in vic and not self._found_victims[vic]:
+                                self._found_victims[vic].append(self._tick)
+                                self._found_victims_logs[vic].append({'location': info['location'],
+                                                                      'room': self._door['room_name'],
+                                                                      'obj_id': info['obj_id'],
+                                                                      'tick': self._tick})
                             if 'healthy' not in vic and vic not in self._known_victims:
                                 self._recent_vic = vic
                                 # Add the victim and the location to the corresponding dictionary
                                 self._known_victims.append(vic)
-                                self._found_victims[vic].append(self._tick)
                                 self._known_victim_logs[vic] = {'location': info['location'],
                                                                 'room': self._door['room_name'],
                                                                 'obj_id': info['obj_id']}
@@ -668,8 +665,8 @@ class BaselineAgent(ArtificialBrain):
                 # Add the area to the list of searched areas
                 if self._door['room_name'] not in self._explored_rooms:
                     self._explored_rooms.append(self._door['room_name'])
-
-                self._searched_rooms[self._door['room_name']].append({'type': 'Robot', 'tick': self._tick})
+                if not self._searched_rooms[self._door['room_name']]:
+                    self._searched_rooms[self._door['room_name']].append({'type': 'Robot', 'tick': self._tick})
                 # Make a plan to rescue a found critically injured victim if the human decides so
                 if self.received_messages_content and self.received_messages_content[
                     -1] == 'Rescue' and 'critical' in self._recent_vic:
@@ -853,25 +850,24 @@ class BaselineAgent(ArtificialBrain):
         """
         process incoming messages received from the team members
         """
-
         receivedMessages = {}
         # Create a dictionary with a list of received messages from each team member
         for member in teamMembers:
             receivedMessages[member] = []
-        for mssg in self.received_messages:
+        for i, mssg in enumerate(self.received_messages):
             for member in teamMembers:
                 if mssg.from_id == member:
-                    receivedMessages[member].append(mssg.content)
+                    receivedMessages[member].append((mssg.content, i))
         # Check the content of the received messages
         for mssgs in receivedMessages.values():
-            for msg in mssgs:
+            for msg, i in mssgs:
                 # If a received message involves team members searching areas, add these areas to the memory of areas that have been explored
                 if msg.startswith("Search:"):
                     area = 'area ' + msg.split()[-1]
                     if area not in self._explored_rooms:
                         self._explored_rooms.append(area)
-
-                    self._searched_rooms[area].append({'type': 'Human', 'tick': self._tick})
+                    if {'type': 'Human', 'tick': self._received_messages[(msg, i)]} not in self._searched_rooms[area]:
+                        self._searched_rooms[area].append({'type': 'Human', 'tick': self._received_messages[(msg, i)]})
                 # If a received message involves team members finding victims, add these victims and their locations to memory
                 if msg.startswith("Found:"):
                     # Identify which victim and area it concerns
@@ -884,8 +880,10 @@ class BaselineAgent(ArtificialBrain):
                     if loc not in self._explored_rooms:
                         self._explored_rooms.append(loc)
 
-                    self._found_victims[foundVic].append(self._tick)
-                    self._found_victims_logs[foundVic].append({'room': loc, 'tick': self._tick})
+                    if self._received_messages[(msg, i)] not in self._found_victims[foundVic]:
+                        self._found_victims[foundVic].append(self._received_messages[(msg, i)])
+                        self._found_victims_logs[foundVic].append(
+                            {'room': loc, 'tick': self._received_messages[(msg, i)]})
 
                     # Add the victim and its location to memory
                     if foundVic not in self._known_victims:
@@ -952,9 +950,10 @@ class BaselineAgent(ArtificialBrain):
                         self._send_message('Will come to ' + area + ' after dropping ' + self._goal_vic + '.',
                                            'RescueBot')
             # Store the current location of the human in memory
-            if mssgs and mssgs[-1].split()[-1] in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13',
-                                                   '14']:
-                self._human_loc = int(mssgs[-1].split()[-1])
+            if mssgs and mssgs[-1][0].split()[-1] in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12',
+                                                      '13',
+                                                      '14']:
+                self._human_loc = int(mssgs[-1][0].split()[-1])
 
     def _loadBelief(self, members, folder):
         """
@@ -992,7 +991,6 @@ class BaselineAgent(ArtificialBrain):
         """
         Baseline implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
         """
-
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
             csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
@@ -1000,7 +998,7 @@ class BaselineAgent(ArtificialBrain):
 
         # Update the trust value based on for example the received messages
         message_no = 0
-        for message, message_tick in receivedMessages.items():
+        for (message, pos), message_tick in receivedMessages.items():
             if 'Collect' in message:
                 task = 'rescue'
 
@@ -1008,7 +1006,9 @@ class BaselineAgent(ArtificialBrain):
                 victim_location = "area " + message_tokens[1]
                 victim_name = message_tokens[0].replace("Collect: ", "")
 
-                if victim_name not in self._found_victims:
+                if not self._found_victims[victim_name] or (
+                        self._found_victims[victim_name] and self._found_victims[victim_name][0] >= message_tick):
+                    log_info(self._message_count != len(receivedMessages), "Victim collected but not found")
                     competence_adj, willingness_adj = compute_collected_adjustments(victim_name, -0.1)
                     self._change_belief(competence_adj, willingness_adj, task, trustBeliefs)
                 elif self._found_victims[victim_name][0] < message_tick:
@@ -1018,13 +1018,20 @@ class BaselineAgent(ArtificialBrain):
                             found_location = log['room']
 
                     if found_location != victim_location:
+                        log_info(self._message_count != len(receivedMessages),
+                                 "Victim collected but found in another location")
                         competence_adj, willingness_adj = compute_collected_adjustments(victim_name, -0.05)
                         self._change_belief(competence_adj, willingness_adj, task, trustBeliefs)
                     else:
+                        log_info(self._message_count != len(receivedMessages),
+                                 "Victim collected and found in right location")
                         competence_adj, willingness_adj = compute_collected_adjustments(victim_name, 0.1)
                         self._change_belief(competence_adj, willingness_adj, task, trustBeliefs)
 
-                if victim_location not in self._searched_rooms:
+                if victim_location not in self._searched_rooms or (
+                        self._searched_rooms[victim_location][0]['tick'] >= message_tick):
+                    log_info(self._message_count != len(receivedMessages),
+                             "Victim collected but location was not searched")
                     self._change_belief(-0.2, -0.2, 'search', trustBeliefs)
                     self._change_belief(-0.2, -0.2, 'rescue', trustBeliefs)
 
@@ -1034,16 +1041,20 @@ class BaselineAgent(ArtificialBrain):
                 search_location = "area " + message_tokens[1]
 
                 if search_location not in self._searched_rooms or (
-                        search_location not in self._searched_rooms and self._searched_rooms[search_location][0][
+                        search_location in self._searched_rooms and self._searched_rooms[search_location][0][
                     'tick'] >= message_tick):
+                    log_info(self._message_count != len(receivedMessages),
+                             "Location searched for the first time")
                     self._change_belief(0.05, 0.05, task, trustBeliefs)
                 else:
                     search_type = None
                     for event in self._searched_rooms[search_location]:
-                        if event['tick'] >= message_tick:
+                        if event['tick'] == message_tick:
                             search_type = event['type']
                             break
 
+                    log_info(self._message_count != len(receivedMessages),
+                             "Location was searched before")
                     competence_adj, willingness_adj = (-0.1, -0.1) if search_type == 'Human' else (
                         -0.15, -0.15)
                     self._change_belief(competence_adj, willingness_adj, task, trustBeliefs)
@@ -1058,6 +1069,7 @@ class BaselineAgent(ArtificialBrain):
                 for task in self._tasks:
                     self._change_belief(-0.1, -0.1, task, trustBeliefs)
 
+            # TODO: write to file only once, at the end
             with open(folder + '/beliefs/currentTrustBelief.csv', mode='a', newline='') as csv_file:
                 csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 for task in self._tasks:
@@ -1067,9 +1079,8 @@ class BaselineAgent(ArtificialBrain):
                 csv_writer.writerow('')
             message_no += 1
 
-        # print(self._human_name, trustBeliefs[self._human_name])
-
         self._decay_trust(self._tick, trustBeliefs)
+        self._message_count = len(receivedMessages)
 
         return trustBeliefs
 
