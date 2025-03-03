@@ -82,6 +82,7 @@ class BaselineAgent(ArtificialBrain):
         self._moving = False
         self._tasks = ['rescue', 'search']
         self.trust_beliefs = {}
+        self._last_trust_decay_tick = 0  # We are using this to decay trust beliefs each 10 ticks
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -92,6 +93,34 @@ class BaselineAgent(ArtificialBrain):
     def filter_observations(self, state):
         # Filtering of the world state before deciding on an action 
         return state
+
+    def _decay_trust(self, current_tick, trust_beliefs):
+        decay_rate = 0.02
+        tick_interval = 10
+
+        # decay trust every 10 ticks
+        if current_tick - self._last_trust_decay_tick >= tick_interval:
+            for task in self._tasks:
+                if task in self.trust_beliefs[self._human_name]:
+                    current_competence = self.trust_beliefs[self._human_name][task]['competence']
+                    current_willingness = self.trust_beliefs[self._human_name][task]['willingness']
+
+                    self.trust_beliefs[self._human_name][task]['competence'] += decay_rate * (0.5 - current_competence)
+                    self.trust_beliefs[self._human_name][task]['willingness'] += decay_rate * (
+                                0.5 - current_willingness)
+
+                    self.trust_beliefs[self._human_name][task]['competence'] = np.clip(
+                        self.trust_beliefs[self._human_name][task]['competence'], -1.0, 1.0
+                    )
+                    self.trust_beliefs[self._human_name][task]['willingness'] = np.clip(
+                        self.trust_beliefs[self._human_name][task]['willingness'], -1.0, 1.0
+                    )
+
+            self._last_trust_decay_tick = current_tick
+
+            print(
+                f"Trust decayed at tick {current_tick}. Current trust beliefs: {self.trust_beliefs[self._human_name]}")
+
 
     def decide_on_actions(self, state):
         self._tick = time.perf_counter()
@@ -110,7 +139,7 @@ class BaselineAgent(ArtificialBrain):
         self._process_messages(state, self._team_members, self._condition)
         # Initialize and update trust beliefs for team members
         trustBeliefs = self._loadBelief(self._team_members, self._folder)
-        self.trustBelief = trustBeliefs
+        self.trust_beliefs = trustBeliefs
         self._trustBelief(self._team_members, trustBeliefs, self._folder, self._received_messages)
 
         # Check whether human is close in distance
@@ -1037,6 +1066,10 @@ class BaselineAgent(ArtificialBrain):
                          trustBeliefs[self._human_name][task]['willingness']])
                 csv_writer.writerow('')
             message_no += 1
+
+        print(self._human_name, trustBeliefs[self._human_name])
+
+        self._decay_trust(self._tick, trustBeliefs)
 
         return trustBeliefs
 

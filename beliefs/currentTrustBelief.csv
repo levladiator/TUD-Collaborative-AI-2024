@@ -1,16 +1,1 @@
-timestamp;name;task;competence;willingness
-0;Vlad;rescue;0.5;0.5
-0;Vlad;search;0.5;0.5
-
-1;Vlad;rescue;0.6;0.6
-1;Vlad;search;0.5;0.5
-
-2;Vlad;rescue;0.6;0.6
-2;Vlad;search;0.5;0.5
-
-3;Vlad;rescue;0.5499999999999999;0.5499999999999999
-3;Vlad;search;0.5;0.5
-
-4;Vlad;rescue;0.44999999999999996;0.44999999999999996
-4;Vlad;search;0.5;0.5
-
+timestamp;name;task;competence;willingness
