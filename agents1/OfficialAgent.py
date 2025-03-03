@@ -73,7 +73,6 @@ class BaselineAgent(ArtificialBrain):
         self._moving = False
         self._tasks = ['rescue', 'search']
         self._message_count = 0
-        self._last_received_message_tick = 0
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -85,28 +84,29 @@ class BaselineAgent(ArtificialBrain):
         # Filtering of the world state before deciding on an action 
         return state
 
-    def _decay_trust(self, trust_beliefs, receivedMessages, use_logging):
-        decay_rate = 0.02
-        decay_rate_weak = 0.01
-        tick_interval = 5 # every 45 seconds we have a trust decay
-        print(self._tick, self._last_received_message_tick)
-        if self._tick - self._last_received_message_tick < tick_interval:
-            return trust_beliefs
+    def _decay_trust(self, receivedMessages):
 
-        # decay trust every 45 ticks (no message received by the RescueBot)
-        for task in self._tasks:
-            if task in trust_beliefs[self._human_name]:
-                if trust_beliefs[self._human_name][task]['competence'] > 0:
-                    trust_beliefs[self._human_name][task]['competence'] -= decay_rate_weak
-                    print("Trust decayed at tick", self._tick)
-                    self._last_received_message_tick = self._tick
-                if trust_beliefs[self._human_name][task]['willingness'] > 0:
-                    trust_beliefs[self._human_name][task]['willingness'] -= decay_rate
-                    print("Trust decayed at tick", self._tick)
-                    self._last_received_message_tick = self._tick
+        max_allowed_gap = 10  #max allowed gap between messages
 
-        log_info(use_logging, f"Trust decayed at tick {self._tick}. Current trust beliefs: {trust_beliefs[self._human_name]}")
-        return trust_beliefs
+        decay_rate_per_tick = 0.002  #decay per tick
+
+        total_decay = 0
+        previous_tick = 0
+
+        # Compute total decay by going through all messages
+        for message_tick in receivedMessages.values():
+            # TODO: binary search
+            if message_tick > self._tick - 45:
+                time_gap = message_tick - previous_tick  # Compute silence duration
+                if time_gap > max_allowed_gap:
+                    total_decay += decay_rate_per_tick * time_gap  # Accumulate decay
+            previous_tick = message_tick  # Update previous tick
+
+        if self._tick - previous_tick > max_allowed_gap:
+            time_gap = self._tick - previous_tick
+            total_decay += decay_rate_per_tick * time_gap
+
+        return total_decay
 
     def decide_on_actions(self, state):
         self._tick = time.perf_counter()
@@ -986,15 +986,6 @@ class BaselineAgent(ArtificialBrain):
         """
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         # Update the trust value based on for example the received messages
-        message_no = 0
-        with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
-            csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow(['timestamp', 'name', 'task', 'competence', 'willingness'])
-            for task in self._tasks:
-                csv_writer.writerow(
-                    [message_no, self._human_name, task, trustBeliefs[self._human_name][task]['competence'],
-                     trustBeliefs[self._human_name][task]['willingness']])
-        message_no += 1
         for (message, pos), message_tick in receivedMessages.items():
             if 'Collect' in message:
                 task = 'rescue'
@@ -1066,28 +1057,29 @@ class BaselineAgent(ArtificialBrain):
                 for task in self._tasks:
                     self._change_belief(-0.1, -0.1, task, trustBeliefs)
 
-            trustBeliefs = self._decay_trust(trustBeliefs, receivedMessages, self._message_count != len(receivedMessages))
+        total_decay = self._decay_trust(receivedMessages)
 
-            # TODO: write to file only once, at the end
-            with open(folder + '/beliefs/currentTrustBelief.csv', mode='a', newline='') as csv_file:
-                csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                for task in self._tasks:
-                    csv_writer.writerow(
-                        [message_no, self._human_name, task, trustBeliefs[self._human_name][task]['competence'],
-                         trustBeliefs[self._human_name][task]['willingness']])
-                csv_writer.writerow('')
+        for task in self._tasks:
+            self._change_belief(-total_decay, -total_decay, task, trustBeliefs, min_val = 0.0, max_val = 1.0)
 
-        if self._message_count != len(receivedMessages):
-            self._message_count = len(receivedMessages)
-            self._last_received_message_tick = self._tick
+        # TODO: write to file only once, at the end
+        with open(folder + '/beliefs/currentTrustBelief.csv', mode='w') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csv_writer.writerow(['name', 'task', 'competence', 'willingness'])
+            for task in self._tasks:
+                csv_writer.writerow(
+                    [self._human_name, task, trustBeliefs[self._human_name][task]['competence'],
+                     trustBeliefs[self._human_name][task]['willingness']])
+
+        self._message_count = len(receivedMessages)
 
         return trustBeliefs
 
     def _change_belief(self, competence_adjustment: float, willingness_adjustment: float, task: str,
-                       trust_beliefs: dict):
-        new_competence = np.clip(trust_beliefs[self._human_name][task]['competence'] + competence_adjustment, -1.0, 1.0)
-        new_willingness = np.clip(trust_beliefs[self._human_name][task]['willingness'] + willingness_adjustment, -1.0,
-                                  1.0)
+                       trust_beliefs: dict, min_val=-1.0, max_val=1.0):
+        new_competence = np.clip(trust_beliefs[self._human_name][task]['competence'] + competence_adjustment, min_val, max_val)
+        new_willingness = np.clip(trust_beliefs[self._human_name][task]['willingness'] + willingness_adjustment, min_val,
+                                  max_val)
         trust_beliefs[self._human_name][task] = {'competence': new_competence, 'willingness': new_willingness}
 
     def _send_message(self, mssg, sender):
