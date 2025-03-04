@@ -1,3 +1,3 @@
 name;task;competence;willingness
-Vlad;rescue;0.09201787960000002;0.09201787960000002
-Vlad;search;0.14201787960000006;0.14201787960000006
+Vlad;rescue;0.5;{'competence': 0.4384967292, 'willingness': 0.4384967292}
+Vlad;search;0.55;{'competence': 0.48849672920000003, 'willingness': 0.48849672920000003}
