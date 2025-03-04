@@ -5,3 +5,21 @@ message_no;name;task;competence;willingness
 0;Vlad;rescue;0.5;0.5
 0;Vlad;search;0.55;0.55
 
+1;Vlad;rescue;0.5;0.5
+1;Vlad;search;0.55;0.65
+
+2;Vlad;rescue;0.5;0.5
+2;Vlad;search;0.6000000000000001;0.7000000000000001
+
+3;Vlad;rescue;0.5;0.5
+3;Vlad;search;0.5000000000000001;0.6000000000000001
+
+4;Vlad;rescue;0.5;0.5
+4;Vlad;search;0.3000000000000001;0.5
+
+5;Vlad;rescue;0.5;0.5
+5;Vlad;search;0.3500000000000001;0.55
+
+6;Vlad;rescue;0.5;0.5
+6;Vlad;search;0.2500000000000001;0.45
+
