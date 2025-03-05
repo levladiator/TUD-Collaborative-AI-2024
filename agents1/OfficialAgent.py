@@ -461,7 +461,7 @@ class BaselineAgent(ArtificialBrain):
                         objects.append(info)
 
                         if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick,
-                                                             self._waiting_time, must_be_done_together=True):
+                                                             self._waiting_time):
                             self._answered = True
                             self._waiting = False
                             self._send_message('Waiting is over. Continuing search.', 'RescueBot')
@@ -476,7 +476,7 @@ class BaselineAgent(ArtificialBrain):
                             self._waiting = True
                             self._started_waiting_tick = self._tick
                             self._waiting_time = calculate_wait_time(self._distance_human,
-                                                                     trustBeliefs[self._human_name]['search'])
+                                                                     trustBeliefs[self._human_name]['search'], must_be_done_together=True)
                             self._send_message('Found rock blocking ' + str(self._door['room_name']) + '. Please decide whether to "Remove" or "Continue" searching. \n \n \
                                 Important features to consider are: \n safe - victims rescued: ' + str(
                                 self._collected_victims) + ' \n explore - areas searched: area ' + str(
@@ -503,7 +503,7 @@ class BaselineAgent(ArtificialBrain):
                                 if not self._waiting and self._remove:
                                     self._waiting = True
                                     self._started_waiting_tick = self._tick
-                                    self._waiting_time = calculate_wait_time(self._distance_human, trustBeliefs[self._human_name]['search'])
+                                    self._waiting_time = calculate_wait_time(self._distance_human, trustBeliefs[self._human_name]['search'], must_be_done_together=True)
                                     self._send_message(f"clock - maximum waiting time: {self._waiting_time} seconds.",
                                                        "RescueBot")
                             # Tell the human to remove the obstacle when he/she arrives
