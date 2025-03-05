@@ -93,6 +93,7 @@ class BaselineAgent(ArtificialBrain):
         self._tasks = ['rescue', 'search']
         self._message_count = 0
         self._confirmed_human_info = defaultdict(list)
+        self._confirmed_info_map_length = 0
         self._task_information = {
             "Search:": {"expected_time_to_complete": 1, "task": "search"},
             "Find:": {"expected_time_to_complete": 1, "task": "rescue"},
@@ -752,7 +753,7 @@ class BaselineAgent(ArtificialBrain):
                                        'RescueBot')
                     # Robot confirmed the human information
                     self._confirmed_human_info['rescue'].append(
-                        {'event': InfoEvent.NOT_FOUND, 'victim': vic, 'location': self._door['room_name']})
+                        {'event': InfoEvent.NOT_FOUND, 'victim': self._goal_vic, 'location': self._door['room_name']})
                     # Remove the victim location from memory
                     self._known_victim_logs.pop(self._goal_vic, None)
                     self._known_victims.remove(self._goal_vic)
@@ -1271,7 +1272,43 @@ class BaselineAgent(ArtificialBrain):
 
         self._message_count = len(receivedMessages)
 
+        self.update_trust_from_confirmed_info(trustBeliefs)
+
         return trustBeliefs
+
+    def update_trust_from_confirmed_info(self, trustBeliefs):
+        # This function is used to update the trust scores based on the confirmed human information that the RescueBot has
+        # received. This information is stored in the self._confirmed_human_info dictionary.
+        # Take each case and adapt slightly the trust scores based on that
+        for i, (task, events) in enumerate(self._confirmed_human_info.items()):
+            for event in events:
+                # Case 1: The human correctly reported a victim location so the human competence improves and the
+                # willingness is slightly adjusted because of the human first having to search before actually finding
+                if event['event'] == InfoEvent.FOUND:
+                    log_info(self._confirmed_info_map_length == i,
+                             f"Trust Update: Human correctly reported victim location - {event['victim']} in {event['location']}")
+                    self._change_belief(0.1, 0.05, 'rescue', trustBeliefs)
+
+                # Case 2: The human incorrectly reported a victim location  so their competence decreases
+                elif event['event'] == InfoEvent.NOT_FOUND:
+                    log_info(self._confirmed_info_map_length == i,
+                             f"Trust Update: Human incorrectly reported victim location - {event['victim']} not found in {event['location']}")
+
+                    self._change_belief(-0.15, 0, 'rescue', trustBeliefs)  # Reduce competence
+
+                # Case 3: The human didn't respond in time so the willingness should be lower
+                elif event['event'] == InfoEvent.WAIT_OVER:
+                    if 'victim' in event:
+                        log_info(self._confirmed_info_map_length == i,
+                                 f"Trust Update: Human did not respond in time for victim - {event['victim']} in {event['location']}")
+
+                        self._change_belief(0, -0.1, 'rescue', trustBeliefs)  # Reduce willingness
+                    elif 'obstacle' in event:
+                        log_info(self._confirmed_info_map_length == i,
+                                 f"Trust Update: Human did not respond in time for obstacle - {event['obstacle']} in {event['location']}")
+
+                        self._change_belief(0, -0.1, 'search', trustBeliefs)
+        self._confirmed_info_map_length = len(self._confirmed_human_info)
 
     def apply_trust_decay(self, total_decay, min_val, trustBeliefs):
         for task in self._tasks:
