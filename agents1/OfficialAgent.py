@@ -1217,15 +1217,6 @@ class BaselineAgent(ArtificialBrain):
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         # Update the trust value based on for example the received messages
         previous_message, previous_message_tick = None, 0
-        message_no = 0
-        with open(folder + '/beliefs/currentTrustBelief2.csv', mode='w') as csv_file:
-            csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow(['message_no', 'name', 'task', 'competence', 'willingness'])
-            for task in self._tasks:
-                csv_writer.writerow(
-                    [message_no, self._human_name, task, trustBeliefs[self._human_name][task]['competence'],
-                     trustBeliefs[self._human_name][task]['willingness']])
-            csv_writer.writerow("")
 
         for i, ((message, pos), message_tick) in enumerate(receivedMessages.items()):
             if 'Collect' in message:
@@ -1357,15 +1348,6 @@ class BaselineAgent(ArtificialBrain):
 
             previous_message = message
             previous_message_tick = message_tick
-
-            with open(folder + '/beliefs/currentTrustBelief2.csv', mode='a') as csv_file:
-                csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                for task in self._tasks:
-                    csv_writer.writerow(
-                        [message_no, self._human_name, task, trustBeliefs[self._human_name][task]['competence'],
-                         trustBeliefs[self._human_name][task]['willingness']])
-                csv_writer.writerow("")
-                message_no += 1
 
         # Penalize the human for not providing information to the robot in a long time.
         total_decay = self._decay_trust(receivedMessages)
