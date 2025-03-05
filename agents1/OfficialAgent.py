@@ -208,6 +208,7 @@ class BaselineAgent(ArtificialBrain):
                 if info['is_carrying'][0]['img_name'][8:-4] not in self._collected_victims:
                     self._collected_victims.append(info['is_carrying'][0]['img_name'][8:-4])
                 self._carrying_together = True
+                self._waiting = False
             if 'is_human_agent' in info and self._human_name in info['name'] and len(info['is_carrying']) == 0:
                 self._carrying_together = False
         # If carrying a victim together, let agent be idle (because joint actions are essentially carried out by the human)
@@ -848,7 +849,7 @@ class BaselineAgent(ArtificialBrain):
                     self._recent_vic = None
                     self._phase = Phase.FIND_NEXT_GOAL
 
-                if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick, self._waiting_time):
+                if not self._carrying_together and self._waiting and is_waiting_over(self._started_waiting_tick, self._tick, self._waiting_time):
                     self._waiting = False
                     self._answered = True
                     self._confirmed_human_info['rescue'].append(
@@ -927,13 +928,14 @@ class BaselineAgent(ArtificialBrain):
                         'class_inheritance'] and 'mild' in info['obj_id'] and info['location'] in self._roomtiles:
                         objects.append(info)
                         # Remain idle when the human has not arrived at the location
-                        if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick, self._waiting):
+                        if not self._carrying_together and self._waiting and is_waiting_over(self._started_waiting_tick, self._tick, self._waiting_time):
                             self._waiting = False
                             self._answered = True
                             victim_name = info['obj_id'].split('_in_')[0].replace('_', ' ')
                             self._confirmed_human_info['rescue'].append(
                                 {'event': InfoEvent.WAIT_OVER, 'victim': victim_name,
                                  'location': self._door['room_name']})
+                            print("abcabc", victim_name)
 
                             if 'mild' in victim_name:
                                 self._rescue = 'alone'
@@ -951,10 +953,16 @@ class BaselineAgent(ArtificialBrain):
                                 self._phase = Phase.FIND_NEXT_GOAL
                                 return None, {}
 
-                        if not self._human_name in info['name']:
+                        if not self._human_name in info['name'] and not self._waiting:
                             self._waiting = True
+                            self._started_waiting_tick = self._tick
+                            self._waiting_time = calculate_wait_time(self._distance_human,
+                                                                             trustBeliefs[self._human_name]['rescue'],
+                                                                             critically_injured=('critical' in self._goal_vic))
                             self._moving = False
+                            self._send_message(f"clock - maximum waiting time: {self._waiting_time}", "RescueBot")
                             return None, {}
+                        return None, {}
                 # Add the victim to the list of rescued victims when it has been picked up
                 if len(objects) == 0 and 'critical' in self._goal_vic or len(
                         objects) == 0 and 'mild' in self._goal_vic and self._rescue == 'together':
@@ -962,6 +970,7 @@ class BaselineAgent(ArtificialBrain):
                     if self._goal_vic not in self._collected_victims:
                         self._collected_victims.append(self._goal_vic)
                     self._carrying_together = True
+                    self._waiting = False
                     # Add event for collecting victim together
                     self._confirmed_human_info['rescue'].append(
                         {'event': InfoEvent.COLLECT, 'victim': self._goal_vic, 'location': self._door['room_name']})
