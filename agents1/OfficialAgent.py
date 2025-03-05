@@ -1419,6 +1419,35 @@ class BaselineAgent(ArtificialBrain):
                                  f"Trust Update: Human did not respond in time for obstacle - {event['obstacle']} in {event['location']}")
 
                         self._change_belief(0, -0.1, 'search', trustBeliefs)
+
+                # Case 4: The human reported a false rescue so the competence decreases and the willingness is
+                # slightly decreased
+                elif event['event'] == InfoEvent.FALSE_RESCUE:
+                    log_info(self._confirmed_info_map_length == i,
+                             f"Trust Update: Human falsely reported a rescue - No victim found in {event['location']}")
+                    self._change_belief(-0.2, -0.1, 'rescue', trustBeliefs)  # Strong penalty for misinformation
+
+                # Case 5: The human successfully delivered a victim to safety so the competence increases and
+                # the willingness is slightly increased
+                elif event['event'] == InfoEvent.DELIVER:
+                    log_info(self._confirmed_info_map_length == i,
+                             f"Trust Update: Human successfully delivered victim - {event['victim']} to safety")
+                    self._change_belief(0.2, 0.1, 'rescue', trustBeliefs)
+
+                # Case 6: The human helped remove an obstacle so the competence increases and the willingness is
+                # also increased
+                elif event['event'] == InfoEvent.REMOVE:
+                    log_info(self._confirmed_info_map_length == i,
+                             f"Trust Update: Human helped remove an obstacle - {event['obstacle']} at {event['location']}")
+                    self._change_belief(0.1, 0.1, 'search', trustBeliefs)
+
+                # Case 7: The human successfully collected a victim so the competence increases and the willingness
+                # is also increased slightly less
+                elif event['event'] == InfoEvent.COLLECT:
+                    log_info(self._confirmed_info_map_length == i,
+                             f"Trust Update: Human successfully collected victim - {event['victim']} in {event['location']}")
+                    self._change_belief(0.15, 0.1, 'rescue', trustBeliefs)
+
         self._confirmed_info_map_length = len(self._confirmed_human_info)
 
     def apply_trust_decay(self, total_decay, min_val, trustBeliefs):
