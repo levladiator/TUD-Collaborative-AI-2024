@@ -459,6 +459,18 @@ class BaselineAgent(ArtificialBrain):
                     if 'class_inheritance' in info and 'ObstacleObject' in info['class_inheritance'] and 'rock' in info[
                         'obj_id']:
                         objects.append(info)
+
+                        if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick,
+                                                             self._waiting_time, must_be_done_together=True):
+                            self._answered = True
+                            self._waiting = False
+                            self._send_message('Waiting is over. Continuing search.', 'RescueBot')
+                            self._confirmed_human_info['search'].append(
+                                {'event': InfoEvent.WAIT_OVER, 'obstacle': Obstacle.ROCK,
+                                 'location': self._door['room_name']})
+                            self._phase = Phase.ENTER_ROOM
+                            self._remove = False
+                            return None, {}
                         # Communicate which obstacle is blocking the entrance
                         if self._answered == False and not self._remove and not self._waiting:
                             self._waiting = True
@@ -488,31 +500,41 @@ class BaselineAgent(ArtificialBrain):
                                 self._send_message(
                                     'Please come to ' + str(self._door['room_name']) + ' to remove rock.',
                                     'RescueBot')
-                                return None, {}
+                                if not self._waiting and self._remove:
+                                    self._waiting = True
+                                    self._started_waiting_tick = self._tick
+                                    self._waiting_time = calculate_wait_time(self._distance_human, trustBeliefs[self._human_name]['search'])
+                                    self._send_message(f"clock - maximum waiting time: {self._waiting_time} seconds.",
+                                                       "RescueBot")
                             # Tell the human to remove the obstacle when he/she arrives
                             if state[{'is_human_agent': True}]:
                                 self._send_message('Lets remove rock blocking ' + str(self._door['room_name']) + '!',
                                                    'RescueBot')
-                                return None, {}
+                                if not self._waiting and self._remove:
+                                    self._waiting = True
+                                    self._started_waiting_tick = self._tick
+                                    self._waiting_time = 6 # player is close, so we only wait 6 seconds
+                                    self._send_message(f"clock - maximum waiting time: {self._waiting_time} seconds.",
+                                                       "RescueBot")
                         # Remain idle until the human communicates what to do with the identified obstacle
-                        else:
-                            if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick,
-                                                                 self._waiting_time):
-                                self._answered = True
-                                self._waiting = False
-                                self._send_message('Waiting is over. Removing rock alone.', 'RescueBot')
-                                self._confirmed_human_info['search'].append(
-                                    {'event': InfoEvent.WAIT_OVER, 'obstacle': Obstacle.ROCK,
-                                     'location': self._door['room_name']})
-                                self._phase = Phase.ENTER_ROOM
-                                self._remove = False
-                                return RemoveObject.__name__, {'object_id': info['obj_id']}
-
-                            return None, {}
+                        return None, {}
 
                     if 'class_inheritance' in info and 'ObstacleObject' in info['class_inheritance'] and 'tree' in info[
                         'obj_id']:
                         objects.append(info)
+
+                        if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick,
+                                                             self._waiting_time):
+                            self._answered = True
+                            self._waiting = False
+                            self._send_message('Waiting is over. Removing tree alone.', 'RescueBot')
+                            self._confirmed_human_info['search'].append(
+                                {'event': InfoEvent.WAIT_OVER, 'obstacle': Obstacle.TREE,
+                                 'location': self._door['room_name']})
+                            self._phase = Phase.ENTER_ROOM
+                            self._remove = False
+                            return RemoveObject.__name__, {'object_id': info['obj_id']}
+
                         # Communicate which obstacle is blocking the entrance
                         if self._answered == False and not self._remove and not self._waiting:
                             self._waiting = True
@@ -549,23 +571,24 @@ class BaselineAgent(ArtificialBrain):
                             return RemoveObject.__name__, {'object_id': info['obj_id']}
                         # Remain idle until the human communicates what to do with the identified obstacle
                         else:
-                            if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick,
-                                                                 self._waiting_time):
-                                self._answered = True
-                                self._waiting = False
-                                self._send_message('Waiting is over. Removing tree alone.', 'RescueBot')
-                                self._confirmed_human_info['search'].append(
-                                    {'event': InfoEvent.WAIT_OVER, 'obstacle': Obstacle.TREE,
-                                     'location': self._door['room_name']})
-                                self._phase = Phase.ENTER_ROOM
-                                self._remove = False
-                                return RemoveObject.__name__, {'object_id': info['obj_id']}
-
                             return None, {}
 
                     if 'class_inheritance' in info and 'ObstacleObject' in info['class_inheritance'] and 'stone' in \
                             info['obj_id']:
                         objects.append(info)
+                        # Check if waiting time is over
+                        if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick,
+                                                             self._waiting_time):
+                            self._answered = True
+                            self._waiting = False
+                            self._send_message('Waiting is over. Removing stone alone.', 'RescueBot')
+                            self._confirmed_human_info['search'].append(
+                                {'event': InfoEvent.WAIT_OVER, 'obstacle': Obstacle.STONE,
+                                 'location': self._door['room_name']})
+                            self._phase = Phase.ENTER_ROOM
+                            self._remove = False
+                            return RemoveObject.__name__, {'object_id': info['obj_id']}
+
                         # Communicate which obstacle is blocking the entrance
                         if self._answered == False and not self._remove and not self._waiting:
                             self._waiting = True
@@ -596,6 +619,7 @@ class BaselineAgent(ArtificialBrain):
                             self._phase = Phase.ENTER_ROOM
                             self._remove = False
                             return RemoveObject.__name__, {'object_id': info['obj_id']}
+
                         # Remove the obstacle together if the human decides so
                         if self.received_messages_content and self.received_messages_content[
                             -1] == 'Remove together' or self._remove:
@@ -606,27 +630,25 @@ class BaselineAgent(ArtificialBrain):
                                 self._send_message(
                                     'Please come to ' + str(self._door['room_name']) + ' to remove stones together.',
                                     'RescueBot')
-                                return None, {}
+                                if not self._waiting and self._remove:
+                                    self._waiting = True
+                                    self._started_waiting_tick = self._tick
+                                    self._waiting_time = calculate_wait_time(self._distance_human,
+                                                                             trustBeliefs[self._human_name]['search'])
+                                    self._send_message(f"clock - maximum waiting time: {self._waiting_time} seconds.",
+                                                       "RescueBot")
                             # Tell the human to remove the obstacle when he/she arrives
                             if state[{'is_human_agent': True}]:
                                 self._send_message('Lets remove stones blocking ' + str(self._door['room_name']) + '!',
                                                    'RescueBot')
-                                return None, {}
-                        # Remain idle until the human communicates what to do with the identified obstacle
-                        else:
-                            if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick,
-                                                                 self._waiting_time):
-                                self._answered = True
-                                self._waiting = False
-                                self._send_message('Waiting is over. Removing stone alone.', 'RescueBot')
-                                self._confirmed_human_info['search'].append(
-                                    {'event': InfoEvent.WAIT_OVER, 'obstacle': Obstacle.STONE,
-                                     'location': self._door['room_name']})
-                                self._phase = Phase.ENTER_ROOM
-                                self._remove = False
-                                return RemoveObject.__name__, {'object_id': info['obj_id']}
+                                if not self._waiting and self._remove:
+                                    self._waiting = True
+                                    self._started_waiting_tick = self._tick
+                                    self._waiting_time = 6 # player is close, so we only wait 6 seconds
+                                    self._send_message(f"clock - maximum waiting time: {self._waiting_time} seconds.",
+                                                       "RescueBot")
 
-                            return None, {}
+                        return None, {}
                 # If no obstacles are blocking the entrance, enter the area
                 if len(objects) == 0:
                     self._answered = False
@@ -749,7 +771,7 @@ class BaselineAgent(ArtificialBrain):
                                     self._started_waiting_tick = self._tick
                                     self._waiting_time = calculate_wait_time(self._distance_human,
                                                                              trustBeliefs[self._human_name]['rescue'],
-                                                                             critically_injured=True)
+                                                                             must_be_done_together=True)
                                     self._send_message('Found ' + vic + ' in ' + self._door['room_name'] + '. Please decide whether to "Rescue" or "Continue" searching. \n\n \
                                         Important features to consider are: \n explore - areas searched: area ' + str(
                                         self._explored_rooms).replace('area',
@@ -958,8 +980,8 @@ class BaselineAgent(ArtificialBrain):
                             self._waiting = True
                             self._started_waiting_tick = self._tick
                             self._waiting_time = calculate_wait_time(self._distance_human,
-                                                                             trustBeliefs[self._human_name]['rescue'],
-                                                                             critically_injured=('critical' in self._goal_vic))
+                                                                     trustBeliefs[self._human_name]['rescue'],
+                                                                     must_be_done_together=('critical' in self._goal_vic))
                             self._moving = False
                             self._send_message(f"clock - maximum waiting time: {self._waiting_time}", "RescueBot")
                             return None, {}
