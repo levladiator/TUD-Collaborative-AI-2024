@@ -11,10 +11,12 @@ def log_info(use: bool, message: str):
     if use:
         logging.info(message)
 
-def calculate_wait_time(distance_to_human: str, taskTrustBelief: dict) -> int:
+def calculate_wait_time(distance_to_human: str, taskTrustBelief: dict, critically_injured=False) -> int:
     willingness = taskTrustBelief['willingness'] + 1
     competence = taskTrustBelief['competence'] + 1
     multiplier = 1.5 if distance_to_human == 'close' else 2
+    if critically_injured:
+        multiplier *= 1.5
 
     # Willingness to help is more important than competence
     # The time increases quadratically with the trustworthiness
