@@ -459,7 +459,7 @@ class BaselineAgent(ArtificialBrain):
                     if 'class_inheritance' in info and 'ObstacleObject' in info['class_inheritance'] and 'rock' in info[
                         'obj_id']:
                         objects.append(info)
-
+                        # Check whether the wait time is up
                         if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick,
                                                              self._waiting_time):
                             self._answered = True
@@ -513,7 +513,7 @@ class BaselineAgent(ArtificialBrain):
                                 if not self._waiting and self._remove:
                                     self._waiting = True
                                     self._started_waiting_tick = self._tick
-                                    self._waiting_time = 6 # player is close, so we only wait 6 seconds
+                                    self._waiting_time = 10 # player is close, so we only wait 10 seconds
                                     self._send_message(f"clock - maximum waiting time: {self._waiting_time} seconds.",
                                                        "RescueBot")
                         # Remain idle until the human communicates what to do with the identified obstacle
@@ -644,7 +644,7 @@ class BaselineAgent(ArtificialBrain):
                                 if not self._waiting and self._remove:
                                     self._waiting = True
                                     self._started_waiting_tick = self._tick
-                                    self._waiting_time = 6 # player is close, so we only wait 6 seconds
+                                    self._waiting_time = 10 # player is close, so we only wait 10 seconds
                                     self._send_message(f"clock - maximum waiting time: {self._waiting_time} seconds.",
                                                        "RescueBot")
 
@@ -958,7 +958,6 @@ class BaselineAgent(ArtificialBrain):
                             self._confirmed_human_info['rescue'].append(
                                 {'event': InfoEvent.WAIT_OVER, 'victim': victim_name,
                                  'location': self._door['room_name']})
-                            print("abcabc", victim_name)
 
                             if 'mild' in victim_name:
                                 self._rescue = 'alone'
