@@ -1259,8 +1259,8 @@ class BaselineAgent(ArtificialBrain):
                         self._searched_rooms[victim_location][0]['tick'] >= message_tick):
                     log_info(self._message_count == i,
                              "Victim collected but location was not searched. Search and rescue ability and willingness decrease")
-                    self._change_belief(-0.2, -0.2, 'search', trustBeliefs)
-                    self._change_belief(-0.2, -0.2, 'rescue', trustBeliefs)
+                    self._change_belief(-0.12, -0.12, 'search', trustBeliefs)
+                    self._change_belief(-0.12, -0.12, 'rescue', trustBeliefs)
 
             elif 'Search' in message:
                 task = 'search'
@@ -1272,7 +1272,7 @@ class BaselineAgent(ArtificialBrain):
                     'tick'] >= message_tick):
                     log_info(self._message_count == i,
                              "Location searched for the first time. Search ability and willingness increase")
-                    self._change_belief(0.05, 0.05, task, trustBeliefs)
+                    self._change_belief(0.05, 0.08, task, trustBeliefs)
                 else:
                     search_type = None
                     for event in self._searched_rooms[search_location]:
@@ -1307,7 +1307,7 @@ class BaselineAgent(ArtificialBrain):
                     if same_victim_reported_twice_at_different_location:
                         log_info(self._message_count == i,
                                  f"{victim_name} reported twice at different locations. Rescue ability and willingness decrease")
-                        self._change_belief(-0.1, -0.1, task, trustBeliefs)
+                        self._change_belief(-0.12, -0.12, task, trustBeliefs)
                     else:
                         log_info(self._message_count == i,
                                  f"{victim_name} reported twice at the same location. Rescue ability and willingness decrease, but with a small amount")
@@ -1316,10 +1316,9 @@ class BaselineAgent(ArtificialBrain):
                 if not self._searched_rooms[location] or (self._searched_rooms[location][0]['tick'] >= message_tick):
                     log_info(self._message_count == i,
                              f"Found a victim in unsearched room {location}. Rescue and search ability and willingness decrease")
-                    self._change_belief(-0.2, -0.2, 'search', trustBeliefs)
-                    self._change_belief(-0.2, -0.2, 'rescue', trustBeliefs)
+                    self._change_belief(-0.12, -0.12, 'search', trustBeliefs)
+                    self._change_belief(-0.12, -0.12, 'rescue', trustBeliefs)
 
-            # TODO check if the bot asked for remove + take distance into account for remove alone
             elif 'Remove' in message:
                 task = 'search'
                 if message == "Remove alone":
@@ -1328,7 +1327,7 @@ class BaselineAgent(ArtificialBrain):
                 elif message == "Remove together":
                     log_info(self._message_count == i,
                              f"Player wants to help removing the obstacle. Search ability and willingness")
-                    self._change_belief(0.05, 0.05, task, trustBeliefs)
+                    self._change_belief(0.05, 0.15, task, trustBeliefs)
                 elif message == "Remove":
                     log_info(self._message_count == i,
                              f"Player wants to remove the tree. Search willingness slightly increases")
@@ -1342,11 +1341,11 @@ class BaselineAgent(ArtificialBrain):
                             self._searched_rooms[location][0]['tick'] >= message_tick):
                         log_info(self._message_count == i,
                                  f"Search ability and willingness decrease for asking for remove help in unsearched room {location}")
-                        self._change_belief(-0.2, -0.2, 'search', trustBeliefs)
+                        self._change_belief(-0.12, -0.12, 'search', trustBeliefs)
 
             elif 'Continue' in message:
                 for task in self._tasks:
-                    self._change_belief(-0.1, -0.1, task, trustBeliefs)
+                    self._change_belief(0.0, -0.1, task, trustBeliefs)
 
             if previous_message:
                 previous_message_info = self._task_information.get(message.split(" ")[0])
