@@ -115,6 +115,7 @@ class BaselineAgent(ArtificialBrain):
                 "willingness": 0.5,
             }
         }
+        self._reserved_names = {'ALWAYS_TRUST', 'NEVER_TRUST', 'RANDOM_TRUST'}
 
     def initialize(self):
         # Initialization of the state tracker and navigation algorithm
@@ -1210,8 +1211,12 @@ class BaselineAgent(ArtificialBrain):
 
     def _trustBelief(self, members, trustBeliefs, folder, receivedMessages):
         """
-        Baseline implementation of a trust belief. Creates a dictionary with trust belief scores for each team member, for example based on the received messages.
+        Creates a dictionary with trust belief scores for each team member.
+        Does not change the beliefs for ALWAYS_TRUST, NEVER_TRUST and RANDOM_TRUST.
         """
+        if self._human_name in self._reserved_names:
+            return
+
         # Save current trust belief values so we can later use and retrieve them to add to a csv file with all the logged trust belief values
         # Update the trust value based on for example the received messages
         previous_message, previous_message_tick = None, 0
