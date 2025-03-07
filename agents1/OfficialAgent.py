@@ -1332,6 +1332,16 @@ class BaselineAgent(ArtificialBrain):
                                  f"Search ability and willingness decrease for asking for remove help in unsearched room {location}")
                         self._change_belief(-0.12, -0.12, 'search', trustBeliefs)
 
+            if 'Rescue' in message:
+                task = 'rescue'
+                if message == "Rescue alone":
+                    log_info(self._message_count == i,
+                             f"Rescue alone. Nothing happens, as the robot will do it itself")
+                elif message == "Rescue together" or message == "Rescue":
+                    log_info(self._message_count == i,
+                             f"Player wants to help rescuing the victim. Rescue ability and willingness")
+                    self._change_belief(0.12, 0.12, task, trustBeliefs)
+
             elif 'Continue' in message:
                 for task in self._tasks:
                     self._change_belief(0.0, -0.1, task, trustBeliefs)
@@ -1375,26 +1385,26 @@ class BaselineAgent(ArtificialBrain):
                 # Case 1: The human correctly reported a victim location so the human competence improves and the
                 # willingness is slightly adjusted because of the human first having to search before actually finding
                 if event['event'] == InfoEvent.FOUND:
-                    log_info(self._confirmed_info_map_length == i,
+                    log_info(self._confirmed_info_map_length <= i,
                              f"Trust Update: Human correctly reported victim location - {event['victim']} in {event['location']}")
                     self._change_belief(0.1, 0.05, 'rescue', trustBeliefs)
 
                 # Case 2: The human incorrectly reported a victim location  so their competence decreases
                 elif event['event'] == InfoEvent.NOT_FOUND:
-                    log_info(self._confirmed_info_map_length == i,
+                    log_info(self._confirmed_info_map_length <= i,
                              f"Trust Update: Human incorrectly reported victim location - {event['victim']} not found in {event['location']}")
 
                     self._change_belief(-0.15, 0, 'rescue', trustBeliefs)  # Reduce competence
 
                 # Case 3: The human didn't respond in time so the willingness should be lower
                 elif event['event'] == InfoEvent.WAIT_OVER:
-                    if 'victim' in event:
-                        log_info(self._confirmed_info_map_length == i,
+                    if event.get('victim'):
+                        log_info(self._confirmed_info_map_length <= i,
                                  f"Trust Update: Human did not respond in time for victim - {event['victim']} in {event['location']}")
 
                         self._change_belief(0, -0.1, 'rescue', trustBeliefs)  # Reduce willingness
-                    elif 'obstacle' in event:
-                        log_info(self._confirmed_info_map_length == i,
+                    elif event.get('obstacle'):
+                        log_info(self._confirmed_info_map_length <= i,
                                  f"Trust Update: Human did not respond in time for obstacle - {event['obstacle']} in {event['location']}")
 
                         self._change_belief(0, -0.1, 'search', trustBeliefs)
@@ -1402,32 +1412,32 @@ class BaselineAgent(ArtificialBrain):
                 # Case 4: The human reported a false rescue so the competence decreases and the willingness is
                 # slightly decreased
                 elif event['event'] == InfoEvent.FALSE_RESCUE:
-                    log_info(self._confirmed_info_map_length == i,
+                    log_info(self._confirmed_info_map_length <= i,
                              f"Trust Update: Human falsely reported a rescue - No victim found in {event['location']}")
                     self._change_belief(-0.2, -0.1, 'rescue', trustBeliefs)  # Strong penalty for misinformation
 
                 # Case 5: The human successfully delivered a victim to safety so the competence increases and
                 # the willingness is slightly increased
                 elif event['event'] == InfoEvent.DELIVER:
-                    log_info(self._confirmed_info_map_length == i,
+                    log_info(self._confirmed_info_map_length <= i,
                              f"Trust Update: Human successfully delivered victim - {event['victim']} to safety")
                     self._change_belief(0.2, 0.1, 'rescue', trustBeliefs)
 
                 # Case 6: The human helped remove an obstacle so the competence increases and the willingness is
                 # also increased
                 elif event['event'] == InfoEvent.REMOVE:
-                    log_info(self._confirmed_info_map_length == i,
+                    log_info(self._confirmed_info_map_length <= i,
                              f"Trust Update: Human helped remove an obstacle - {event['obstacle']} at {event['location']}")
                     self._change_belief(0.1, 0.1, 'search', trustBeliefs)
 
                 # Case 7: The human successfully collected a victim so the competence increases and the willingness
                 # is also increased slightly less
                 elif event['event'] == InfoEvent.COLLECT:
-                    log_info(self._confirmed_info_map_length == i,
+                    log_info(self._confirmed_info_map_length <= i,
                              f"Trust Update: Human successfully collected victim - {event['victim']} in {event['location']}")
                     self._change_belief(0.15, 0.1, 'rescue', trustBeliefs)
 
-        self._confirmed_info_map_length = len(self._confirmed_human_info)
+        self._confirmed_info_map_length = len(self._confirmed_human_info.values())
 
     def apply_trust_decay(self, total_decay, min_val, trustBeliefs):
         for task in self._tasks:

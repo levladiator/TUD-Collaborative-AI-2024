@@ -23,7 +23,7 @@ def output_logger(fld):
     with open(action_file) as csvfile:
         reader = csv.reader(csvfile, delimiter=';', quotechar="'")
         for row in reader:
-            if action_header==[]:
+            if not action_header:
                 action_header=row
                 continue
             if row[2:4] not in unique_agent_actions and row[2]!="":
@@ -39,17 +39,24 @@ def output_logger(fld):
     with open(fld+'/beliefs/currentTrustBelief.csv') as csvfile:
         reader = csv.reader(csvfile, delimiter=';', quotechar="'")
         for row in reader:
-            if trustfile_header==[]:
+            if not trustfile_header:
                 trustfile_header=row
                 continue
             if row:
                 res = {trustfile_header[i] : row[i] for i in range(len(trustfile_header))}
                 trustfile_contents.append(res)
     # Retrieve the stored trust belief values
-    name = trustfile_contents[-1]['name']
-    task = trustfile_contents[-1]['task']
-    competence = trustfile_contents[-1]['competence']
-    willingness = trustfile_contents[-1]['willingness']
+    with open(fld + '/beliefs/allTrustBeliefs.csv', mode='a+') as csv_file:
+        csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        csv_writer.writerow([])
+    for _content in trustfile_contents:
+        name = _content['name']
+        task = _content['task']
+        competence = _content['competence']
+        willingness = _content['willingness']
+        with open(fld + '/beliefs/allTrustBeliefs.csv', mode='a+') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csv_writer.writerow([name, task, competence, willingness])
     # Retrieve the number of ticks to finish the task, score, and completeness
     no_ticks = action_contents[-1]['tick_nr']
     score = action_contents[-1]['score']
@@ -60,6 +67,3 @@ def output_logger(fld):
         csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         csv_writer.writerow(['completeness','score','no_ticks','agent_actions','human_actions'])
         csv_writer.writerow([completeness,score,no_ticks,len(unique_agent_actions),len(unique_human_actions)])
-    with open(fld + '/beliefs/allTrustBeliefs.csv', mode='a+') as csv_file:
-        csv_writer = csv.writer(csv_file, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        csv_writer.writerow([name,task,competence,willingness])
