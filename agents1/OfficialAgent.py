@@ -1193,16 +1193,16 @@ class BaselineAgent(ArtificialBrain):
             for row in reader:
                 if not trustfile_header:
                     trustfile_header = row
-                    continue
-                # Retrieve trust values 
-                if row and row[0] == self._human_name:
+                # Retrieve trust values
+                elif row and row[0] == self._human_name:
                     name = row[0]
                     task = row[1]
                     competence = float(row[2])
                     willingness = float(row[3])
                     trustBeliefs[name][task] = {'competence': competence, 'willingness': willingness}
+                    return trustBeliefs
                 # Initialize default trust values
-                if row and row[0] != self._human_name:
+                elif row and row[0] != self._human_name or not row:
                     for task in self._tasks:
                         competence = self._base_trust_beliefs[task]['competence']
                         willingness = self._base_trust_beliefs[task]['willingness']
