@@ -1203,7 +1203,7 @@ class BaselineAgent(ArtificialBrain):
                     willingness = float(row[3])
                     trustBeliefs[name][task] = {'competence': competence, 'willingness': willingness}
         for task in self._tasks:
-            if not trustBeliefs[self._human_name][task]:
+            if not trustBeliefs[self._human_name] or not trustBeliefs[self._human_name].get(task):
                 competence = self._base_trust_beliefs[task]['competence']
                 willingness = self._base_trust_beliefs[task]['willingness']
                 trustBeliefs[self._human_name][task] = {'competence': competence, 'willingness': willingness}
