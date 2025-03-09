@@ -41,11 +41,10 @@ class InfoEvent(enum.Enum):
     FOUND = 1,
     COLLECT = 2,
     REMOVE = 3,
-    SEARCH = 4,
-    NOT_FOUND = 5,
-    WAIT_OVER = 6,
-    DELIVER = 7,
-    FALSE_RESCUE = 8,
+    NOT_FOUND = 4,
+    WAIT_OVER = 5,
+    DELIVER = 6,
+    FALSE_RESCUE = 7,
 
 
 class Obstacle(enum.Enum):
