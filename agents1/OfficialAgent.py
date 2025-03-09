@@ -1248,12 +1248,16 @@ class BaselineAgent(ArtificialBrain):
                         competence_adj, willingness_adj = compute_collected_adjustments(victim_name, 0.1)
                         self._change_belief(competence_adj, willingness_adj, task, trustBeliefs)
 
-                if victim_location not in self._searched_rooms or (
-                        self._searched_rooms[victim_location][0]['tick'] >= message_tick):
+                if victim_location not in self._searched_rooms or not self._searched_rooms[victim_location]:
                     log_info(self._message_count == i,
-                             "Victim collected but location was not searched. Search and rescue ability and willingness decrease")
-                    self._change_belief(-0.12, -0.12, 'search', trustBeliefs)
-                    self._change_belief(-0.12, -0.12, 'rescue', trustBeliefs)
+                             "Victim location not found in searched rooms. Skipping trust adjustment to prevent errors.")
+                else:
+                    if self._searched_rooms[victim_location][0]['tick'] >= message_tick:
+                        log_info(self._message_count == i,
+                                 "Victim collected but location was not searched. Search and rescue ability and willingness decrease")
+                        self._change_belief(-0.12, -0.12, 'search', trustBeliefs)
+                        self._change_belief(-0.12, -0.12, 'rescue', trustBeliefs)
+
 
             elif 'Search' in message:
                 task = 'search'
