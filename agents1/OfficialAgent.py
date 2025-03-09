@@ -522,7 +522,7 @@ class BaselineAgent(ArtificialBrain):
                     if 'class_inheritance' in info and 'ObstacleObject' in info['class_inheritance'] and 'tree' in info[
                         'obj_id']:
                         objects.append(info)
-
+                        # check whether the waiting is over
                         if self._waiting and is_waiting_over(self._started_waiting_tick, self._tick,
                                                              self._waiting_time):
                             self._answered = True
@@ -558,6 +558,7 @@ class BaselineAgent(ArtificialBrain):
                         # Remove the obstacle if the human tells the agent to do so
                         if self.received_messages_content and self.received_messages_content[
                             -1] == 'Remove' or self._remove:
+                            # Tell the human to come over and be idle until human arrives
                             if not self._remove:
                                 self._answered = True
                                 self._waiting = False
@@ -754,6 +755,7 @@ class BaselineAgent(ArtificialBrain):
                                                                 'room': self._door['room_name'],
                                                                 'obj_id': info['obj_id']}
                                 # Communicate which victim the agent found and ask the human whether to rescue the victim now or at a later stage
+                                # Start waiting for an answer
                                 if 'mild' in vic and self._answered == False and not self._waiting:
                                     self._waiting = True
                                     self._started_waiting_tick = self._tick
@@ -766,6 +768,7 @@ class BaselineAgent(ArtificialBrain):
                                         clock - extra time when rescuing alone: 15 seconds \n afstand - distance between us: ' + self._distance_human + f'\n clock - maximum waiting time: {self._waiting_time} seconds.',
                                                        'RescueBot')
 
+                                # Start waiting for an answer
                                 if 'critical' in vic and self._answered == False and not self._waiting:
                                     self._waiting = True
                                     self._started_waiting_tick = self._tick
@@ -806,7 +809,7 @@ class BaselineAgent(ArtificialBrain):
                 if not self._searched_rooms[self._door['room_name']]:
                     self._searched_rooms[self._door['room_name']].append({'type': 'Robot', 'tick': self._tick})
 
-                # Check if the robot requested a Rescue type message
+                # Check if the robot requested a Rescue type message and emit a false rescue if not
                 if self.received_messages_content and self.received_messages_content[-1] in {'Rescue',
                                                                                              'Rescue together',
                                                                                              'Rescue alone'} and not self._recent_vic:
@@ -872,6 +875,7 @@ class BaselineAgent(ArtificialBrain):
                     self._recent_vic = None
                     self._phase = Phase.FIND_NEXT_GOAL
 
+                # Check whether the waiting time expired
                 if not self._carrying_together and self._waiting and is_waiting_over(self._started_waiting_tick, self._tick, self._waiting_time):
                     self._waiting = False
                     self._answered = True
@@ -950,7 +954,7 @@ class BaselineAgent(ArtificialBrain):
                         self._explored_rooms) == 0 and 'class_inheritance' in info and 'CollectableBlock' in info[
                         'class_inheritance'] and 'mild' in info['obj_id'] and info['location'] in self._roomtiles:
                         objects.append(info)
-                        # Remain idle when the human has not arrived at the location
+                        # Remain idle when the human has not arrived at the location or until the waiting time expires
                         if not self._carrying_together and self._waiting and is_waiting_over(self._started_waiting_tick, self._tick, self._waiting_time):
                             self._waiting = False
                             self._answered = True
@@ -975,6 +979,7 @@ class BaselineAgent(ArtificialBrain):
                                 self._phase = Phase.FIND_NEXT_GOAL
                                 return None, {}
 
+                        # Start waiting
                         if not self._human_name in info['name'] and not self._waiting:
                             self._waiting = True
                             self._started_waiting_tick = self._tick
@@ -1201,6 +1206,7 @@ class BaselineAgent(ArtificialBrain):
                     competence = float(row[2])
                     willingness = float(row[3])
                     trustBeliefs[name][task] = {'competence': competence, 'willingness': willingness}
+        # Initialize with default values if not initialized yet
         for task in self._tasks:
             if not trustBeliefs[self._human_name] or not trustBeliefs[self._human_name].get(task):
                 competence = self._base_trust_beliefs[task]['competence']
@@ -1213,6 +1219,7 @@ class BaselineAgent(ArtificialBrain):
         Creates a dictionary with trust belief scores for each team member.
         Does not change the beliefs for ALWAYS_TRUST, NEVER_TRUST and RANDOM_TRUST.
         """
+        # Do not change baseline trust
         if self._human_name in self._reserved_names:
             return
 
